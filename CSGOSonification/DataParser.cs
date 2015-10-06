@@ -18,65 +18,77 @@ namespace CSGOSonification
         DBConnection db;
 
         IObservable<int> roundNumbers;
+        IObservable<EventPattern<WeaponFiredEventArgs>> weaponFired;
 
         public DemoDataParser(string fileName, DBConnection db)
         {
             this.db = db;
             parser = new DemoParser(File.OpenRead(fileName));
-
-            var tickDone = Observable.FromEventPattern<TickDoneEventArgs>(parser, "TickDone")
-                .Where(_ =>
-                {
-                    return parser.PlayingParticipants.ToArray<Player>().Length > 0;
-                });
-
-            //createObservables();
             
-            
+            createObservables();
 
             parser.ParseHeader();
             parser.ParseToEnd();
-
-
-            
-
-            
+  
         }
 
         private void createObservables()
         {
-            createSmokeEventsObservable();
-
+            weaponFired = Observable.FromEventPattern<WeaponFiredEventArgs>(parser, "WeaponFired");
             roundNumbers = Observable.FromEventPattern<RoundStartedEventArgs>(parser, "RoundStart")
                 .Select(_ =>
                 {
                     return parser.TScore + parser.CTScore;
                 });
+
+
+            createSmokeEventsObservable();
+            createPositionObservable();
+
+            
         }
 
+        private void createPositionObservable()
+        {
+            var playerStream = Observable.FromEventPattern<TickDoneEventArgs>(parser, "TickDone")
+                .Where(_ =>
+                    {
+                        return parser.PlayingParticipants.ToArray<Player>().Length > 0;
+                    })
+                .Select(_ =>
+                    {
+                        return parser.PlayingParticipants;
+                    });
+
+
+
+        }
+
+        private void createFlashEventObservable()
+        {
+            var flashThrown = weaponFired.Where(evt => { return evt.EventArgs.Weapon.Weapon == EquipmentElement.Flash; })
+                .Select(evt => { return Tuple.Create(evt.EventArgs.Shooter.Position, evt.EventArgs.Shooter.Team, 1);});
+            var flashExploded = Observable.FromEventPattern<NadeEventArgs>(parser, "FlashNadeStarted")
+                .Select(evt => { return Tuple.Create(evt.EventArgs.Position, evt.EventArgs.ThrownBy.Team, 0); });
+            var flashEvents = flashThrown.Merge(flashExploded)
+                .CombineLatest<Tuple<Vector, Team, int>, int, Tuple<Vector, Team, int, int, float>>(roundNumbers,
+                (t, rn) => { return Tuple.Create(t.Item1, t.Item2, t.Item3, rn, parser.CurrentTime); });
+        }
         private void createSmokeEventsObservable()
         {
-            var weaponFired = Observable.FromEventPattern<WeaponFiredEventArgs>(parser, "WeaponFired");
             var smokesThrown = weaponFired.Where(evt => { return evt.EventArgs.Weapon.Weapon == EquipmentElement.Smoke; })
                 .Select(evt =>
                 {
-                    return Tuple.Create(evt.EventArgs.Shooter.Position, 1);
+                    var shooter = evt.EventArgs.Shooter;
+                    return Tuple.Create(shooter.Position, shooter.Team,  1);
                 });
             var smokesLanded = Observable.FromEventPattern<SmokeEventArgs>(parser, "SmokeNadeStarted")
-                .Select(evt =>
-                {
-                    return Tuple.Create(evt.EventArgs.Position, 0);
-                });
+                .Select(evt => {return Tuple.Create(evt.EventArgs.Position, evt.EventArgs.ThrownBy.Team, 0);});
+            //Types make this look obtuse. Basically merges all smoke events and appends current round number and time.
+            var smokeEvents = smokesThrown.Merge(smokesLanded)
+                .CombineLatest<Tuple<Vector, Team, int>, int, Tuple<Vector, Team, int, int, float>>(roundNumbers, 
+                (t, rn) => { return Tuple.Create(t.Item1, t.Item2, t.Item3, rn, parser.CurrentTime); });
 
-            var smokeEvents = smokesThrown.Merge(smokesLanded);
-                //.CombineLatest<Tuple<Vector, int>, int, Tuple<Vector,int, int>>(roundNumbers, 
-                //(t, rn) => { return Tuple.Create(t.Item1, t.Item2, rn); });
-
-            smokeEvents.Subscribe(t =>
-            {
-                Console.Out.WriteLine("hej");
-                //db.addSmokeEvent(t.Item1, t.Item2);
-            });
         }
     }
 }
