@@ -43,12 +43,12 @@ namespace CSGOSonification
 
 
             createSmokeEventsObservable();
-            createPositionObservable();
+            createPlayerDataObservable();
 
             
         }
 
-        private void createPositionObservable()
+        private IObservable<IEnumerable<Player>> createPlayerDataObservable()
         {
             var playerStream = Observable.FromEventPattern<TickDoneEventArgs>(parser, "TickDone")
                 .Where(_ =>
@@ -60,11 +60,10 @@ namespace CSGOSonification
                         return parser.PlayingParticipants;
                     });
 
-
-
+            return playerStream;
         }
 
-        private void createFlashEventObservable()
+        private IObservable<Tuple<Vector, Team, int, int, float>> createFlashEventObservable()
         {
             var flashThrown = weaponFired.Where(evt => { return evt.EventArgs.Weapon.Weapon == EquipmentElement.Flash; })
                 .Select(evt => { return Tuple.Create(evt.EventArgs.Shooter.Position, evt.EventArgs.Shooter.Team, 1);});
@@ -73,8 +72,9 @@ namespace CSGOSonification
             var flashEvents = flashThrown.Merge(flashExploded)
                 .CombineLatest<Tuple<Vector, Team, int>, int, Tuple<Vector, Team, int, int, float>>(roundNumbers,
                 (t, rn) => { return Tuple.Create(t.Item1, t.Item2, t.Item3, rn, parser.CurrentTime); });
+            return flashEvents;        
         }
-        private void createSmokeEventsObservable()
+        private IObservable<Tuple<Vector, Team, int, int, float>> createSmokeEventsObservable()
         {
             var smokesThrown = weaponFired.Where(evt => { return evt.EventArgs.Weapon.Weapon == EquipmentElement.Smoke; })
                 .Select(evt =>
@@ -88,6 +88,8 @@ namespace CSGOSonification
             var smokeEvents = smokesThrown.Merge(smokesLanded)
                 .CombineLatest<Tuple<Vector, Team, int>, int, Tuple<Vector, Team, int, int, float>>(roundNumbers, 
                 (t, rn) => { return Tuple.Create(t.Item1, t.Item2, t.Item3, rn, parser.CurrentTime); });
+
+            return smokeEvents;
 
         }
     }
