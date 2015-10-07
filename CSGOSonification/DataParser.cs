@@ -12,17 +12,21 @@ using System.Data.SQLite;
 namespace CSGOSonification
 {
     //For lack of a better name
-    class DemoDataParser
+    class DataStreamManager
     {
-        DemoParser parser;
+        public DemoParser parser;
         DBConnection db;
 
         IObservable<int> roundNumbers;
         IObservable<EventPattern<WeaponFiredEventArgs>> weaponFired;
+        public IObservable<Tuple<IEnumerable<Player>, float, int>> playerInfoStream;
+        public IObservable<Tuple<Vector, Team, int, int, float>> smokeEventStream;
+        public IObservable<Tuple<Vector, Team, int, int, float>> flashEventStream;
+        public IObservable<EventPattern<HeaderParsedEventArgs>> headerParsedStream;
 
-        public DemoDataParser(string fileName, DBConnection db)
+
+        public DataStreamManager(string fileName)
         {
-            this.db = db;
             parser = new DemoParser(File.OpenRead(fileName));
             
             createObservables();
@@ -40,33 +44,15 @@ namespace CSGOSonification
                 {
                     return parser.TScore + parser.CTScore;
                 });
-
-
-            createSmokeEventsObservable();
-            var playerInfo = createPlayerDataObservable();
-            var allSqls = playerInfo.Select(t =>
-            {
-                var ps = t.Item1;
-                var sqlStatements = ps.Select(p =>
-                {
-                    return db.addPlayerInfo(p, t.Item2);
-                });
-
-
-                return sqlStatements;
-            });
-
-
+            headerParsedStream = Observable.FromEventPattern<HeaderParsedEventArgs>(parser, "HeaderParsed");
 
             
-
-            
-
-            
-            
+            smokeEventStream = createSmokeEventsObservable();
+            flashEventStream = createFlashEventObservable();
+            playerInfoStream = createPlayerDataObservable();
         }
 
-        private IObservable<Tuple<IEnumerable<Player>, float>> createPlayerDataObservable()
+        private IObservable<Tuple<IEnumerable<Player>, float, int>> createPlayerDataObservable()
         {
             var playerStream = Observable.FromEventPattern<TickDoneEventArgs>(parser, "TickDone")
                 .Where(_ =>
@@ -78,7 +64,13 @@ namespace CSGOSonification
                         return Tuple.Create(parser.PlayingParticipants, parser.CurrentTime);
                     });
 
-            return playerStream;
+            var playerStreamRn = playerStream.CombineLatest<Tuple<IEnumerable<Player>, float>, int, Tuple<IEnumerable<Player>, float, int>>
+                (roundNumbers, (t, rn) =>
+                {
+                    return Tuple.Create(t.Item1, t.Item2, rn);
+                });
+
+            return playerStreamRn;
         }
 
         private IObservable<Tuple<Vector, Team, int, int, float>> createFlashEventObservable()
