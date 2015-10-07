@@ -14,26 +14,26 @@ namespace CSGOSonification
     //For lack of a better name
     class DataStreamManager
     {
-        public DemoParser parser;
+        DemoParser parser;
         DBConnection db;
 
         IObservable<int> roundNumbers;
         IObservable<EventPattern<WeaponFiredEventArgs>> weaponFired;
         public IObservable<Tuple<IEnumerable<Player>, float, int>> playerInfoStream;
-        public IObservable<Tuple<Vector, Team, int, int, float>> smokeEventStream;
+        public IObservable<Tuple<Vector, Team, int, int, float>> smokeEventStream
+        {
+            get; set;
+        }
         public IObservable<Tuple<Vector, Team, int, int, float>> flashEventStream;
         public IObservable<EventPattern<HeaderParsedEventArgs>> headerParsedStream;
 
 
-        public DataStreamManager(string fileName)
+        public DataStreamManager(DemoParser parser)
         {
-            parser = new DemoParser(File.OpenRead(fileName));
+            this.parser = parser;
             
             createObservables();
 
-            parser.ParseHeader();
-            parser.ParseToEnd();
-  
         }
 
         private void createObservables()
@@ -77,7 +77,7 @@ namespace CSGOSonification
         {
             var flashThrown = weaponFired.Where(evt => { return evt.EventArgs.Weapon.Weapon == EquipmentElement.Flash; })
                 .Select(evt => { return Tuple.Create(evt.EventArgs.Shooter.Position, evt.EventArgs.Shooter.Team, 1);});
-            var flashExploded = Observable.FromEventPattern<NadeEventArgs>(parser, "FlashNadeStarted")
+            var flashExploded = Observable.FromEventPattern<NadeEventArgs>(parser, "FlashNadeExploded")
                 .Select(evt => { return Tuple.Create(evt.EventArgs.Position, evt.EventArgs.ThrownBy.Team, 0); });
             var flashEvents = flashThrown.Merge(flashExploded)
                 .CombineLatest<Tuple<Vector, Team, int>, int, Tuple<Vector, Team, int, int, float>>(roundNumbers,

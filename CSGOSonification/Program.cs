@@ -14,17 +14,21 @@ namespace CSGOSonification {
         static void Main(string[] args)
         {
             var db = new DBConnection();
+            var parser = new DemoParser(File.OpenRead("test.dem"));
             //db.createTables();
             //in the end ex was kind of useless, but it was fun to play with.
-            var dataStreams = new DataStreamManager("test.dem");
+            var dataStreams = new DataStreamManager(parser);
 
+            parser.ParseHeader();
+            parser.ParseToEnd();
+            
             dataStreams.headerParsedStream.Subscribe(_ =>
             {
                 db.beginTransaction();
             });
 
             
-
+            dataStreams.smokeEventStream.Subscribe(_ => { Console.Out.WriteLine("hej"); });
             //transform each element to an array of sql statements
             var playerInfoSQL = dataStreams.playerInfoStream.
                                     Select(t =>
@@ -49,13 +53,14 @@ namespace CSGOSonification {
 
             playerInfoSQL.Subscribe(sqlStatements =>
             {
+                Console.Out.WriteLine(parser.ParsingProgess);
                 foreach (var sql in sqlStatements)
                 {
                     db.executeSql(sql);
                 }
 
                 //Since there is no event of the parsing finishin
-                if(dataStreams.parser.ParsingProgess == 1)
+                if(parser.ParsingProgess == 1)
                 {
                     db.endTransaction();
                 }
