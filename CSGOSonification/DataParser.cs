@@ -44,15 +44,25 @@ namespace CSGOSonification
 
             createSmokeEventsObservable();
             var playerInfo = createPlayerDataObservable();
-            playerInfo.Subscribe(t =>
+            var allSqls = playerInfo.Select(t =>
             {
                 var ps = t.Item1;
-                foreach(var p in ps)
+                var sqlStatements = ps.Select(p =>
                 {
-                    db.addPlayerInfo(p, t.Item2);
-                }
-                
+                    return db.addPlayerInfo(p, t.Item2);
+                });
+
+
+                return sqlStatements;
             });
+
+
+
+            
+
+            
+
+            
             
         }
 
