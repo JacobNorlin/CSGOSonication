@@ -43,12 +43,20 @@ namespace CSGOSonification
 
 
             createSmokeEventsObservable();
-            createPlayerDataObservable();
-
+            var playerInfo = createPlayerDataObservable();
+            playerInfo.Subscribe(t =>
+            {
+                var ps = t.Item1;
+                foreach(var p in ps)
+                {
+                    db.addPlayerInfo(p, t.Item2);
+                }
+                
+            });
             
         }
 
-        private IObservable<IEnumerable<Player>> createPlayerDataObservable()
+        private IObservable<Tuple<IEnumerable<Player>, float>> createPlayerDataObservable()
         {
             var playerStream = Observable.FromEventPattern<TickDoneEventArgs>(parser, "TickDone")
                 .Where(_ =>
@@ -57,7 +65,7 @@ namespace CSGOSonification
                     })
                 .Select(_ =>
                     {
-                        return parser.PlayingParticipants;
+                        return Tuple.Create(parser.PlayingParticipants, parser.CurrentTime);
                     });
 
             return playerStream;
