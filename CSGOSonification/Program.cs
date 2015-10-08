@@ -11,23 +11,53 @@ namespace CSGOSonification {
 
     class Program
     {
+
+        DBConnection db;
+        DemoParser parser;
+        DataStreamManager dataStreams;
         static void Main(string[] args)
         {
-            var db = new DBConnection();
-            var parser = new DemoParser(File.OpenRead("test.dem"));
+
+
+
+            Program p = new Program();
+            p.parseToSQLite();
+
+
+
+
+            Console.In.ReadLine();
+        }
+
+
+
+        public Program()
+        {
+            db = new DBConnection();
+            parser = new DemoParser(File.OpenRead("test.dem"));
             //db.createTables();
             //in the end ex was kind of useless, but it was fun to play with.
-            var dataStreams = new DataStreamManager(parser);
+            dataStreams = new DataStreamManager(parser);
+
+
+        }
+
+        public void parseToSQLite()
+        {
+            setSqlSubscription();
 
             parser.ParseHeader();
             parser.ParseToEnd();
-            
+        }
+
+        public void setSqlSubscription()
+        {
             dataStreams.headerParsedStream.Subscribe(_ =>
             {
                 db.beginTransaction();
             });
 
-            
+
             dataStreams.smokeEventStream.Subscribe(_ => { Console.Out.WriteLine("hej"); });
             //transform each element to an array of sql statements
             var playerInfoSQL = dataStreams.playerInfoStream.
@@ -60,7 +90,7 @@ namespace CSGOSonification {
                 }
 
                 //Since there is no event of the parsing finishin
-                if(parser.ParsingProgess == 1)
+                if (parser.ParsingProgess == 1)
                 {
                     db.endTransaction();
                 }
@@ -68,8 +98,6 @@ namespace CSGOSonification {
 
             flashSql.Subscribe(sql => { db.executeSql(sql); });
             smokeSql.Subscribe(sql => { db.executeSql(sql); });
-
-            Console.In.ReadLine();
         }
 
     }
