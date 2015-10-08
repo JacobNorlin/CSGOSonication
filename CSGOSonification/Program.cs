@@ -57,8 +57,6 @@ namespace CSGOSonification {
                 db.beginTransaction();
             });
 
-
-            dataStreams.smokeEventStream.Subscribe(_ => { Console.Out.WriteLine("hej"); });
             //transform each element to an array of sql statements
             var playerInfoSQL = dataStreams.playerInfoStream.
                                     Select(t =>
